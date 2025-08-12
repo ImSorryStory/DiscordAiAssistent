@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      deploy:
+        resources: { reservations: { devices: [ { capabilities: [gpu] } ] } }
+
+  bot:
+    build: .
+    container_name: discord-voice-bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      # Голос Piper:
+      - PIPER_VOICE=/voices/ru_RU/ru_RU-denis-medium.onnx
+      # URL Ollama внутри сети compose
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      # Кэш HF, чтобы whisper-модель не качалась заново при каждом запуске
+      - hf_cache:/root/.cache/huggingface
+
+volumes:
+  ollama_data:
+  hf_cache:
